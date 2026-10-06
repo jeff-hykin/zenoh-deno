@@ -3849,6 +3849,7 @@ dependencies = [
  "bytes",
  "flume",
  "json5",
+ "libc",
  "lru 0.14.0",
  "serde_json",
  "tokio",

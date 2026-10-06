@@ -74,6 +74,12 @@ or `Defragment`. `allocAsync` also accepts `BlockOn`, which waits until memory f
 
 Over a `ws/` remote-api link a `ZShmMut` is still accepted, but its bytes are copied.
 
+On Linux, zenoh locks shared memory into RAM (`mlock`) in every process that maps it. A subscriber
+that can't lock a segment drops the sample, so the locked-memory limit has to fit the pool in the
+publishing process *and* in each subscribing one. zenoh-deno raises the limit as far as the system
+allows, and warns when a pool won't fit. To allow more, use `ulimit -l unlimited` (as root), set
+`memlock` in `/etc/security/limits.conf`, or set `LimitMEMLOCK=infinity` for a systemd service.
+
 ## Zero-copy receiving
 
 A received payload of at least 4 KiB arrives in JS as a view on memory zenoh owns, not as a copy.

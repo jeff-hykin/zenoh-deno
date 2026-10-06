@@ -56,6 +56,15 @@ export class ShmProvider {
         if (handle === 0n) {
             throw new Error(lastError(library) || `could not create a shared-memory provider of ${size} bytes`)
         }
+        if (size > library.memlockLimit / 2) {
+            // zenoh locks (mlock) shared memory wherever it is mapped; a subscriber that cannot lock a segment drops the sample
+            console.warn(
+                `zenoh-deno: a ${size}-byte shared-memory pool is more than half this process's locked-memory limit ` +
+                    `(${library.memlockLimit} bytes). zenoh locks shared memory into RAM where it is mapped, and a subscriber ` +
+                    `that cannot lock it drops the sample. Raise the limit (ulimit -l, or LimitMEMLOCK= for a systemd service) ` +
+                    `in publishing and subscribing processes alike.`,
+            )
+        }
         return new ShmProvider(library, handle, size)
     }
 

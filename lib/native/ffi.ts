@@ -2,7 +2,7 @@
 
 import { defaultZenohVersion_, libraryPath } from "./library.ts"
 
-const ABI_VERSION = 1
+const ABI_VERSION = 2
 
 const SYMBOLS = {
     zd_abi_version: { parameters: [], result: "u32" },
@@ -30,6 +30,7 @@ const SYMBOLS = {
     zd_shm_alloc_blocking: { name: "zd_shm_alloc", parameters: ["u64", "usize", "u8"], result: "u64", nonblocking: true },
     zd_shm_buffer_address: { parameters: ["u64"], result: "pointer" },
     zd_shm_buffer_free: { parameters: ["u64"], result: "void" },
+    zd_memlock_limit: { parameters: [], result: "u64" },
 } as const satisfies Deno.ForeignLibraryInterface
 
 export type NativeSymbols = Deno.DynamicLibrary<typeof SYMBOLS>["symbols"]
@@ -41,10 +42,15 @@ const decoder = new TextDecoder()
 export class NativeLibrary {
     readonly symbols: NativeSymbols
     readonly zenohVersion: string
+    /** bytes this process may lock into RAM (zenoh locks every shared-memory segment it maps); Infinity if unlimited */
+    readonly memlockLimit: number
 
     constructor(symbols: NativeSymbols) {
         this.symbols = symbols
         this.zenohVersion = this.takeText(Number(symbols.zd_zenoh_version()))
+        // raises the limit as far as allowed, before any segment is mapped
+        const limit = BigInt(symbols.zd_memlock_limit())
+        this.memlockLimit = limit === 0xffffffffffffffffn ? Infinity : Number(limit)
     }
 
     /** The bytes the last synchronous call produced. */

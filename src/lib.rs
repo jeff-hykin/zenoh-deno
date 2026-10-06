@@ -30,7 +30,7 @@ use zenoh::{key_expr::keyexpr, Wait};
 use crate::interface::{LivelinessTokenId, PublisherId, QuerierId, QueryableId, SubscriberId};
 
 /// Bumped whenever a symbol's signature or a wire format between JS and this library changes.
-const ABI_VERSION: u32 = 1;
+const ABI_VERSION: u32 = 2;
 
 static RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
     tokio::runtime::Builder::new_multi_thread()

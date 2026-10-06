@@ -94,21 +94,14 @@ jobs:
             cp "$file" "target/release/${name/-${{ matrix.platform }}/}"
           done
           ls target/release
-      - name: "temporary: shared-memory test with zenoh's logging"
-        if: startsWith(matrix.platform, 'linux')
-        continue-on-error: true
-        timeout-minutes: 4
-        shell: bash
-        env:
-          NO_COLOR: "1"
-          ZENOH_DENO_TEST_LOG: "zenoh_shm=debug,zenoh_transport=debug,zenoh::net::runtime=debug,zenoh_deno=debug"
-        run: deno run -A scripts/test.ts --zenoh ${{ matrix.zenoh }} --mode native tests/zero_copy.test.ts --filter "hands the buffer over" 2>&1 | grep -viE "keep_?alive" | tail -150
       - name: test against zenohd ${{ matrix.zenoh }}, in-process and over zenoh-ts's websocket
         shell: bash
         env:
           NO_COLOR: "1"
         # every run must end with its summary line (a process that dies quietly can still exit 0)
         run: |
+          # zenoh locks shared memory into RAM; the runner's default locked-memory limit is too small for the tests
+          if [ "$RUNNER_OS" = "Linux" ]; then sudo prlimit --pid $$ --memlock=unlimited:unlimited; fi
           deno run -A scripts/test.ts --zenoh ${{ matrix.zenoh }} 2>&1 | tee test-output.txt
           expected=$(grep -o "summary-lines-expected::[0-9]*" test-output.txt | cut -d: -f3)
           test "$(grep -cE "^ok \\| [0-9]+ passed \\| 0 failed" test-output.txt)" = "$expected"

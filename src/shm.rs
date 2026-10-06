@@ -109,3 +109,32 @@ pub extern "C" fn zd_shm_buffer_address(handle: u64) -> *mut u8 {
 pub extern "C" fn zd_shm_buffer_free(handle: u64) {
     SHM_BUFFERS.lock().unwrap().remove(&handle);
 }
+
+/// zenoh locks shared memory into RAM (mlock) wherever it maps it, sender and receivers alike, and a
+/// receiver that cannot lock a segment drops the sample. So: raise this process's locked-memory
+/// limit as far as allowed, and report it (bytes; u64::MAX when unlimited or not applicable).
+#[no_mangle]
+pub extern "C" fn zd_memlock_limit() -> u64 {
+    #[cfg(unix)]
+    unsafe {
+        let mut limit = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+        if libc::getrlimit(libc::RLIMIT_MEMLOCK, &mut limit) != 0 {
+            return u64::MAX;
+        }
+        if limit.rlim_cur < limit.rlim_max {
+            let raised = libc::rlimit { rlim_cur: limit.rlim_max, rlim_max: limit.rlim_max };
+            if libc::setrlimit(libc::RLIMIT_MEMLOCK, &raised) == 0 {
+                limit = raised;
+            }
+        }
+        if limit.rlim_cur == libc::RLIM_INFINITY {
+            u64::MAX
+        } else {
+            limit.rlim_cur as u64
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        u64::MAX
+    }
+}
