@@ -86,6 +86,9 @@ const routerConfig = {
 const configPath = `${zenohdDirectory}/test_router.json5`
 Deno.writeTextFileSync(configPath, JSON.stringify(routerConfig))
 const router = new Deno.Command(zenohd, { args: ["-c", configPath], stdout: "null", stderr: "piped" }).spawn()
+// keep reading stderr so zenohd never blocks on a full pipe; kept for the failure message
+const routerLog: string[] = []
+const routerLogDone = router.stderr.pipeThrough(new TextDecoderStream()).pipeTo(new WritableStream({ write: (chunk) => void routerLog.push(chunk) }))
 
 let failed = false
 try {
@@ -96,7 +99,11 @@ try {
             connections.forEach((connection) => connection.close())
             break
         } catch (error) {
-            if (attempt > 100) {
+            if (attempt > 300) {
+                // say why zenohd did not come up
+                router.kill()
+                await routerLogDone.catch(() => {})
+                console.error(`zenohd did not open its ports:\n${routerLog.join("")}`)
                 throw error
             }
             await new Promise((resolve) => setTimeout(resolve, 100))
