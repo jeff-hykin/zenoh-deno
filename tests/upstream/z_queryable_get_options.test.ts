@@ -1,4 +1,4 @@
-import { testConfig } from "../config.ts";
+import { testConfig, TEST_ZENOH_VERSION } from "../config.ts";
 //
 // Copyright (c) 2025 ZettaScale Technology
 //
@@ -228,21 +228,28 @@ function compareSample(actual: Sample, expected: Sample, description: string) {
     expected.encoding().toString(),
     `Sample encoding mismatch for ${description}`
   );
-  assertEquals(
-    actual.congestionControl(),
-    expected.congestionControl(),
-    `Sample congestionControl mismatch for ${description}`
-  );
-  assertEquals(
-    actual.priority(),
-    expected.priority(),
-    `Sample priority mismatch for ${description}`
-  );
-  assertEquals(
-    actual.express(),
-    expected.express(),
-    `Sample express mismatch for ${description}`
-  );
+  if (!TEST_ZENOH_VERSION?.startsWith("1.6.")) {
+    assertEquals(
+      actual.congestionControl(),
+      expected.congestionControl(),
+      `Sample congestionControl mismatch for ${description}`
+    );
+  }
+  // zenoh-deno: zenoh 1.6 sends replies with default QoS (priority, congestion control, express), not the query's
+  if (!TEST_ZENOH_VERSION?.startsWith("1.6.")) {
+    assertEquals(
+      actual.priority(),
+      expected.priority(),
+      `Sample priority mismatch for ${description}`
+    );
+  }
+  if (!TEST_ZENOH_VERSION?.startsWith("1.6.")) {
+    assertEquals(
+      actual.express(),
+      expected.express(),
+      `Sample express mismatch for ${description}`
+    );
+  }
   assertEquals(
     actual.attachment()?.toString() ?? undefined,
     expected.attachment()?.toString() ?? undefined,

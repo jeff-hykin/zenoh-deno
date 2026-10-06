@@ -1,4 +1,6 @@
-import { testConfig } from "../config.ts";
+import { testConfig, TEST_ZENOH_VERSION } from "../config.ts";
+// zenoh-deno: transports/links and their events exist from zenoh 1.10 (tests/native_api.test.ts checks 1.6 throws)
+const connectivity = { ignore: TEST_ZENOH_VERSION?.startsWith("1.6.") ?? false };
 //
 // Copyright (c) 2026 ZettaScale Technology
 //
@@ -21,7 +23,7 @@ function sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-Deno.test("Connectivity - transports()", async () => {
+Deno.test("Connectivity - transports()", connectivity, async () => {
     let session: Session | undefined;
 
     try {
@@ -44,7 +46,7 @@ Deno.test("Connectivity - transports()", async () => {
     }
 });
 
-Deno.test("Connectivity - links()", async () => {
+Deno.test("Connectivity - links()", connectivity, async () => {
     let session: Session | undefined;
 
     try {
@@ -69,7 +71,7 @@ Deno.test("Connectivity - links()", async () => {
     }
 });
 
-Deno.test("Connectivity - transportEventsListener declare/undeclare", async () => {
+Deno.test("Connectivity - transportEventsListener declare/undeclare", connectivity, async () => {
     let session: Session | undefined;
     let listener: TransportEventsListener | undefined;
 
@@ -91,7 +93,7 @@ Deno.test("Connectivity - transportEventsListener declare/undeclare", async () =
     }
 });
 
-Deno.test("Connectivity - linkEventsListener declare/undeclare", async () => {
+Deno.test("Connectivity - linkEventsListener declare/undeclare", connectivity, async () => {
     let session: Session | undefined;
     let listener: LinkEventsListener | undefined;
 
@@ -113,7 +115,7 @@ Deno.test("Connectivity - linkEventsListener declare/undeclare", async () => {
     }
 });
 
-Deno.test("Connectivity - transportEventsListener with history option", async () => {
+Deno.test("Connectivity - transportEventsListener with history option", connectivity, async () => {
     let session: Session | undefined;
     let listener: TransportEventsListener | undefined;
 
@@ -143,7 +145,7 @@ Deno.test("Connectivity - transportEventsListener with history option", async ()
     }
 });
 
-Deno.test("Connectivity - linkEventsListener with history option", async () => {
+Deno.test("Connectivity - linkEventsListener with history option", connectivity, async () => {
     let session: Session | undefined;
     let listener: LinkEventsListener | undefined;
 
@@ -172,7 +174,7 @@ Deno.test("Connectivity - linkEventsListener with history option", async () => {
     }
 });
 
-Deno.test("Connectivity - transportEventsListener no history by default", async () => {
+Deno.test("Connectivity - transportEventsListener no history by default", connectivity, async () => {
     let session: Session | undefined;
     let listener: TransportEventsListener | undefined;
 
@@ -196,7 +198,7 @@ Deno.test("Connectivity - transportEventsListener no history by default", async 
     }
 });
 
-Deno.test("Connectivity - transport fields validation", async () => {
+Deno.test("Connectivity - transport fields validation", connectivity, async () => {
     let session: Session | undefined;
 
     try {
@@ -220,7 +222,7 @@ Deno.test("Connectivity - transport fields validation", async () => {
     }
 });
 
-Deno.test("Connectivity - link fields validation", async () => {
+Deno.test("Connectivity - link fields validation", connectivity, async () => {
     let session: Session | undefined;
 
     try {
