@@ -59,7 +59,8 @@ async function ensureZenohd(): Promise<string> {
         const zip = `${zenohdDirectory}/${asset}`
         Deno.writeFileSync(zip, new Uint8Array(await response.arrayBuffer()))
         if (Deno.build.os === "windows") {
-            await run("tar", ["-xf", zip, "-C", zenohdDirectory])
+            // Windows' own bsdtar reads zips; Git Bash's GNU tar (often first on PATH) takes "D:" for a host
+            await run(`${Deno.env.get("SystemRoot") ?? "C:\\Windows"}\\System32\\tar.exe`, ["-xf", zip, "-C", zenohdDirectory])
         } else {
             await run("unzip", ["-oq", zip, "-d", zenohdDirectory])
         }
