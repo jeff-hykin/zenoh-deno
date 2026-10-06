@@ -166,7 +166,7 @@ export class Query {
      * gets an selector of Query
      * @returns Selector
      */
-    selector() {
+    selector(): Selector {
         return new Selector(this.inner.keyexpr_, this.inner.parameters_)
     }
     /**

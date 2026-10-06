@@ -259,11 +259,6 @@ export class SessionInner {
         return session;
     }
 
-    /** The native library behind an in-process session (undefined over a ws/ link). */
-    get native() {
-        return this.link.native;
-    }
-
     async declarePublisher(info: PublisherProperties): Promise<PublisherId> {
         let publisherId = IdSource.get<PublisherId>();
         await this.sendRequest(
@@ -426,19 +421,19 @@ export class SessionInner {
         );
     }
 
-    async put(data: Put) {
+    async put(data: Put): Promise<void> {
         return await this.sendMessage(data);
     }
 
-    async delete(data: Delete) {
+    async delete(data: Delete): Promise<void> {
         return await this.sendMessage(data);
     }
 
-    async publisherPut(data: PublisherPut) {
+    async publisherPut(data: PublisherPut): Promise<void> {
         return await this.sendMessage(data);
     }
 
-    async publisherDelete(data: PublisherDelete) {
+    async publisherDelete(data: PublisherDelete): Promise<void> {
         return await this.sendMessage(data);
     }
 

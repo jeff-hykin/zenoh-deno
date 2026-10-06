@@ -72,10 +72,13 @@ const routerConfig = {
     mode: "router",
     listen: { endpoints: ["tcp/127.0.0.1:17447"] },
     scouting: { multicast: { enabled: false }, gossip: { enabled: false } },
-    ...(mode === "native" ? {} : {
-        plugins_loading: { enabled: true, search_dirs: [zenohdDirectory] },
-        plugins: { remote_api: { websocket_port: "10000" } },
-    }),
+    // non-Deno zenoh nodes for tests/interop.test.ts: zenohd's REST plugin publishes, its storage answers queries
+    plugins_loading: { enabled: true, search_dirs: [zenohdDirectory] },
+    plugins: {
+        rest: { http_port: "18000" },
+        storage_manager: { storages: { interop: { key_expr: "interop/storage/**", volume: "memory" } } },
+        ...(mode === "native" ? {} : { remote_api: { websocket_port: "10000" } }),
+    },
     timestamping: { enabled: { router: true, peer: true, client: true } },
 }
 const configPath = `${zenohdDirectory}/test_router.json5`
@@ -87,7 +90,7 @@ try {
     // wait for the router's ports
     for (let attempt = 0; ; attempt++) {
         try {
-            const connections = await Promise.all((mode === "native" ? [17447] : [17447, 10000]).map((port) => Deno.connect({ port })))
+            const connections = await Promise.all((mode === "native" ? [17447, 18000] : [17447, 18000, 10000]).map((port) => Deno.connect({ port })))
             connections.forEach((connection) => connection.close())
             break
         } catch (error) {

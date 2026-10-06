@@ -78,7 +78,9 @@ Over a `ws/` remote-api link a `ZShmMut` is still accepted, but its bytes are co
 
 A received payload of at least 4 KiB arrives in JS as a view on memory zenoh owns, not as a copy.
 `sample.payload().isZeroCopy()` tells you which case you have. The memory stays alive while JS can still
-reach it and is freed after garbage collection. If you re-publish such a payload (to forward it), JS hands
+reach it and is freed after garbage collection, or right away with `payload.release()` (or `using`). Call
+`release()` when you are done with big shared-memory payloads. The publisher's pool cannot reuse a buffer
+while a subscriber still holds it, and an idle process may not collect garbage for a long time. If you re-publish such a payload (to forward it), JS hands
 zenoh back the same buffer instead of copying it. `setZeroCopyThreshold(bytes)` changes the 4 KiB cutoff.
 
 ## Performance
@@ -86,7 +88,14 @@ zenoh back the same buffer instead of copying it. `setZeroCopyThreshold(bytes)` 
 Publisher and subscriber in separate Deno processes on one machine, one 16 MiB message in flight at a
 time (`deno run -A bench/shm_cross_process.ts 16 50`):
 
-<!-- BENCH -->
+| path | payload | n | median latency | p90 latency | throughput | arrived as shm |
+|---|---|---|---|---|---|---|
+| copy | 16 MiB | 50 | 9.77 ms | 13.55 ms | 1557 MiB/s | false |
+| shm | 16 MiB | 50 | 0.17 ms | 0.29 ms | 37805 MiB/s | true |
+
+(Apple M-series laptop, release build, zenoh 1.10.1. Latency runs from the publisher's `put` to the
+subscriber's handler. In both rows the publisher writes only a timestamp into a buffer that is already
+filled, so the numbers measure transport, not filling the buffer.)
 
 ## Differences from zenoh-ts
 

@@ -76,8 +76,13 @@ export class NativeLink implements Link {
     }
 
     send(msg: Uint8Array): Promise<void> {
-        if (!this.open_ || this.native.symbols.zd_send(this.sessionId, msg as Uint8Array<ArrayBuffer>, BigInt(msg.length)) !== 0) {
+        const status = this.open_ ? this.native.symbols.zd_send(this.sessionId, msg as Uint8Array<ArrayBuffer>, BigInt(msg.length)) : -1
+        if (status === -1) {
             return Promise.reject(new Error("zenoh session is closed"))
+        }
+        if (status !== 0) {
+            // the native side logged why; a request is also answered with the error
+            return Promise.reject(new Error("zenoh-deno: the native library rejected a malformed message"))
         }
         return Promise.resolve()
     }

@@ -75,14 +75,15 @@ impl Deserialize for WirePayload {
     }
 }
 
-/// Writes a payload going to JS: small ones inline, big ones as a view on native memory.
+/// Writes a payload going to JS: small ones inline, big ones and shared memory as a view on native memory.
 pub(crate) fn serialize_payload(serializer: &mut ZSerializer, payload: &ZBytes) {
-    if payload.len() < ZERO_COPY_THRESHOLD.load(Ordering::Relaxed) {
+    let is_shm = payload.as_shm().is_some();
+    // shared memory is always viewed in place, whatever its size
+    if !is_shm && payload.len() < ZERO_COPY_THRESHOLD.load(Ordering::Relaxed) {
         serializer.serialize(TAG_INLINE);
         serializer.serialize(payload.to_bytes());
         return;
     }
-    let is_shm = payload.as_shm().is_some();
     // a payload in one piece is viewed where it is; a fragmented one is joined once
     let owned = match payload.to_bytes() {
         std::borrow::Cow::Borrowed(_) => payload.clone(),

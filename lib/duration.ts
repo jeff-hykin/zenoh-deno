@@ -31,14 +31,28 @@ function toMilliseconds(time: MaybeTimeDuration): number {
     return time.value * MILLISECONDS_PER_UNIT[time.unit]
 }
 
-function unit<T extends TimeDuration>(type: T["type"], unitName: T["unit"]) {
+/** Makes and reads durations of one unit. */
+export interface DurationUnit<T extends TimeDuration> {
+    of: (value: number) => T
+    from: (time: MaybeTimeDuration) => number
+}
+
+function unit<T extends TimeDuration>(type: T["type"], unitName: T["unit"]): DurationUnit<T> {
     return {
         of: (value: number): T => ({ type, valueType: "TYPED_DURATION", value, unit: unitName }) as T,
         from: (time: MaybeTimeDuration): number => toMilliseconds(time) / MILLISECONDS_PER_UNIT[unitName],
     }
 }
 
-export const Duration = {
+export const Duration: {
+    milliseconds: DurationUnit<Milliseconds>
+    seconds: DurationUnit<Seconds>
+    minutes: DurationUnit<Minutes>
+    hours: DurationUnit<Hours>
+    days: DurationUnit<Days>
+    value: { from: (time: MaybeTimeDuration) => number; of: (time: MaybeTimeDuration, defaultUnit?: string) => string }
+    isTypedDuration: (maybe: unknown) => maybe is TimeDuration
+} = {
     milliseconds: unit<Milliseconds>("MILLISECONDS", "ms"),
     seconds: unit<Seconds>("SECONDS", "s"),
     minutes: unit<Minutes>("MINUTES", "m"),

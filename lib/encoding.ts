@@ -186,7 +186,7 @@ export class Encoding {
     /**
      * Constant alias for string "zenoh/bytes"
      */
-    static readonly ZENOH_BYTES = new Encoding(EncodingPredefined.ZENOH_BYTES);
+    static readonly ZENOH_BYTES: Encoding = new Encoding(EncodingPredefined.ZENOH_BYTES);
     /**
      * Constant alias for string "zenoh/string"
      */

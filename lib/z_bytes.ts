@@ -24,9 +24,9 @@ export type IntoZBytes =
     | String
     | string;
 
-/** @internal where a ZBytes's bytes live when they are not a plain JS copy */
-export type ZBytesOrigin =
-    | { kind: "native"; handle: bigint; library: object; isShm: boolean }
+/** where a ZBytes's bytes live when they are not a plain JS copy */
+type ZBytesOrigin =
+    | { kind: "native"; handle: bigint; library: object; isShm: boolean; release: () => void }
     | { kind: "shm"; buffer: ZShmMut };
 
 /**
@@ -34,8 +34,7 @@ export type ZBytesOrigin =
  */
 export class ZBytes {
     private buffer_: Uint8Array;
-    /** @internal */
-    origin_: ZBytesOrigin | undefined;
+    private origin_: ZBytesOrigin | undefined;
 
     /**
      * new function to create a ZBytes 
@@ -61,8 +60,8 @@ export class ZBytes {
         }
     }
 
-    /** @internal wraps bytes without copying them */
-    static wrap_(bytes: Uint8Array, origin?: ZBytesOrigin): ZBytes {
+    /** wraps bytes without copying them (used by the native payload reader) */
+    private static wrap_(bytes: Uint8Array, origin?: ZBytesOrigin): ZBytes {
         const zbytes = Object.create(ZBytes.prototype) as ZBytes;
         zbytes.buffer_ = bytes;
         zbytes.origin_ = origin;
@@ -84,6 +83,24 @@ export class ZBytes {
      */
     public isZeroCopy(): boolean {
         return this.origin_ !== undefined;
+    }
+
+    /**
+     * Gives a received zero-copy payload's memory back to zenoh now, instead of when it is
+     * garbage-collected. This matters for shared memory: the publisher's pool cannot reuse a
+     * buffer while any subscriber still holds it. Afterwards this ZBytes (and every view of its
+     * bytes) is empty. Does nothing for payloads that are plain JS copies.
+     */
+    public release(): void {
+        if (this.origin_?.kind === "native") {
+            this.origin_.release();
+            this.origin_ = undefined;
+            this.buffer_ = new Uint8Array(0);
+        }
+    }
+
+    [Symbol.dispose](): void {
+        this.release();
     }
 
     /**

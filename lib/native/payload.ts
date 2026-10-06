@@ -5,6 +5,12 @@ import type { ZBytesDeserializer, ZBytesSerializer } from "../ext/serialization.
 import { ZBytes } from "../z_bytes.ts"
 import type { NativeLibrary } from "./ffi.ts"
 
+// ZBytes and ZShmMut keep these private so the native types stay out of the public API
+type ShmBufferInternals = { library_: NativeLibrary; handle_: bigint; isValid(): boolean; markConsumed_(): void }
+type Origin = { kind: "native"; handle: bigint; library: object; isShm: boolean; release: () => void } | { kind: "shm"; buffer: ShmBufferInternals }
+const wrap = (bytes: Uint8Array, origin?: Origin): ZBytes => (ZBytes as unknown as { wrap_: (bytes: Uint8Array, origin?: Origin) => ZBytes }).wrap_(bytes, origin)
+const originOf = (payload: ZBytes): Origin | undefined => (payload as unknown as { origin_: Origin | undefined }).origin_
+
 const TAG_INLINE = 0
 const TAG_NATIVE_VIEW = 1
 const TAG_SHM_BUFFER = 2
@@ -46,11 +52,26 @@ export function readPayload(deserializer: ZBytesDeserializer): ZBytes {
     const pointer = Deno.UnsafePointer.create(address)
     if (length === 0 || pointer === null) {
         library.symbols.zd_view_free(handle)
-        return ZBytes.wrap_(new Uint8Array(0))
+        return wrap(new Uint8Array(0))
     }
     const buffer = Deno.UnsafePointerView.getArrayBuffer(pointer, length)
-    viewRegistry.register(buffer, { library, handle })
-    return ZBytes.wrap_(new Uint8Array(buffer), { kind: "native", handle, library, isShm })
+    const token = {}
+    viewRegistry.register(buffer, { library, handle }, token)
+    let released = false
+    const release = () => {
+        if (!released) {
+            released = true
+            viewRegistry.unregister(token)
+            // detach first, so no JS view can reach the memory once it is freed
+            try {
+                buffer.transfer(0)
+            } catch {
+                // not detachable: free it anyway, the caller asked for it
+            }
+            library.symbols.zd_view_free(handle)
+        }
+    }
+    return wrap(new Uint8Array(buffer), { kind: "native", handle, library, isShm, release })
 }
 
 export function readOptionalPayload(deserializer: ZBytesDeserializer): ZBytes | undefined {
@@ -63,7 +84,7 @@ export function writePayload(serializer: ZBytesSerializer, payload: ZBytes): voi
         serializer.serializeUint8Array(payload.toBytes())
         return
     }
-    const origin = payload.origin_
+    const origin = originOf(payload)
     if (origin?.kind === "shm" && origin.buffer.library_ === library && origin.buffer.isValid()) {
         serializer.serializeNumberUint8(TAG_SHM_BUFFER)
         serializer.serializeBigintUint64(origin.buffer.handle_)
@@ -91,7 +112,7 @@ export function writeOptionalPayload(serializer: ZBytesSerializer, payload: ZByt
     }
 }
 
-const consumeAfterSend: { markConsumed_(): void }[] = []
+const consumeAfterSend: ShmBufferInternals[] = []
 const keepAliveUntilSent: ZBytes[] = []
 
 /** Called right after a message was handed to the native side: shared-memory buffers it carried are no longer JS's. */

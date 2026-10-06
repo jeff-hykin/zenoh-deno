@@ -75,7 +75,7 @@ export class Querier {
      * returns key expression for this Querier
      * @returns KeyExpr
      */
-    keyExpr() {
+    keyExpr(): KeyExpr {
         return this.keyExpr_;
     }
 
@@ -83,7 +83,7 @@ export class Querier {
      * returns Congestion Control for this Querier
      * @returns CongestionControl
      */
-    congestionControl() {
+    congestionControl(): CongestionControl {
         return this.congestionControl_;
     }
 
@@ -91,7 +91,7 @@ export class Querier {
      * returns Priority for this Querier
      * @returns Priority
      */
-    priority() {
+    priority(): Priority {
         return this.priority_;
     }
 
@@ -99,7 +99,7 @@ export class Querier {
      * returns ReplyKeyExpr for this Querier
      * @returns ReplyKeyExpr
      */
-    acceptReplies() {
+    acceptReplies(): ReplyKeyExpr {
         return this.acceptReplies_;
     }
 

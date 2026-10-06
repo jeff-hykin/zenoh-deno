@@ -19,7 +19,10 @@ const subscriber = await session.declareSubscriber(key, {
         const bytes = payload.toBytes()
         // the publisher stamps its send time (ms since epoch, f64) in the first 8 bytes
         const sentAt = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getFloat64(0, true)
-        console.log(JSON.stringify({ n: received, length: bytes.length, isShm: payload.isShm(), zeroCopy: payload.isZeroCopy(), latencyMs: performance.timeOrigin + performance.now() - sentAt, lastByte: bytes[bytes.length - 1] }))
+        const line = JSON.stringify({ n: received, length: bytes.length, isShm: payload.isShm(), zeroCopy: payload.isZeroCopy(), latencyMs: performance.timeOrigin + performance.now() - sentAt, lastByte: bytes[bytes.length - 1] })
+        // done with it: hand the (shared) memory back now rather than at the next garbage collection
+        payload.release()
+        console.log(line)
         received++
         if (received >= count) {
             done()

@@ -41,6 +41,13 @@ Deno.test({ name: "zero-copy: small payloads are copied, big ones are views on n
         assert(!big.payload().isShm())
         assertEquals(big.payload().toBytes(), bytes)
 
+        // release() frees the native memory now and empties the views
+        const view = big.payload().toBytes()
+        const alive = await nativePayloadsAlive(TEST_ZENOH_VERSION)
+        big.payload().release()
+        assertEquals(view.length, 0)
+        assertEquals(await nativePayloadsAlive(TEST_ZENOH_VERSION), alive - 1)
+
         await setZeroCopyThreshold(64, TEST_ZENOH_VERSION)
         const medium = await receive(b, "zc/medium", () => a.put("zc/medium", new Uint8Array(100)))
         assert(medium.payload().isZeroCopy(), "the threshold is adjustable")
@@ -88,7 +95,7 @@ Deno.test({ name: "zero-copy: shared-memory publishing hands the buffer over wit
         assertEquals(sample.payload().len(), 1 << 20)
         assertEquals(sample.payload().toBytes()[12345], 42)
         // the publisher's access to the memory is gone
-        assert(!buffer.isValid())
+        assert(!buffer.isValid(), "published buffers are no longer valid")
         assertEquals(view.length, 0)
         assertThrows(() => buffer.bytes())
 
@@ -97,7 +104,7 @@ Deno.test({ name: "zero-copy: shared-memory publishing hands the buffer over wit
         const second = provider.alloc(1000)
         second.bytes().fill(7)
         const viaPublisher = await receive(b, "zc/shm2", () => publisher.put(new ZBytes(second)))
-        assert(viaPublisher.payload().isShm())
+        assert(viaPublisher.payload().isShm(), "a small shared-memory payload is still received as shared memory")
         assertEquals(viaPublisher.payload().toBytes()[999], 7)
         await publisher.undeclare()
 

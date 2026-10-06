@@ -20,7 +20,7 @@ export class ZenohId {
         }
     }
 
-    toString() {
+    toString(): string {
         let out: string = "";
         for (let i = this.zid.length - 1; i >= 0; --i) {
             let b = this.zid[i] as number;
@@ -30,7 +30,7 @@ export class ZenohId {
         return out;
     }
 
-    toLeBytes() {
+    toLeBytes(): Uint8Array {
         return this.zid;
     }
 }

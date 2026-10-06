@@ -116,6 +116,8 @@ Deno.test("API - Session Get with Channel", async () => {
         session2 = await Session.open(testConfig());
 
         queryable = await session1.declareQueryable(ke, { complete: true });
+        // zenoh-deno: in-process sessions are separate zenoh nodes, so the declaration takes a moment to reach the router
+        await sleep(500);
 
         receiver1 = await session2.get(new Selector(selector, "ok"), { payload: "1" });
         if (!receiver1) {
@@ -381,6 +383,8 @@ Deno.test("API - Session Get with multiple responses", async () => {
         session2 = await Session.open(testConfig());
 
         queryable = await session1.declareQueryable(ke, { complete: true });
+        // zenoh-deno: in-process sessions are separate zenoh nodes, so the declaration takes a moment to reach the router
+        await sleep(500);
 
         receiver1 = await session2.get(new Selector(selector, "ok"), { payload: "1", consolidation: ConsolidationMode.NONE });
         if (!receiver1) {

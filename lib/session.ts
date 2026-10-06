@@ -223,7 +223,7 @@ export class Session {
         await this.inner.close();
     }
 
-    isClosed() {
+    isClosed(): boolean {
         return this.inner.isClosed();
     }
     /**

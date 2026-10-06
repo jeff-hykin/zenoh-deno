@@ -41,8 +41,7 @@ export class ShmProvider {
     private closed_ = false
 
     private constructor(
-        /** @internal */
-        readonly library_: NativeLibrary,
+        private readonly library_: NativeLibrary,
         private readonly handle_: bigint,
         /** the pool's size in bytes */
         readonly size: number,
@@ -76,7 +75,7 @@ export class ShmProvider {
         if (handle === 0n) {
             throw new Error(lastError(this.library_) || `could not allocate ${length} bytes of shared memory`)
         }
-        return new ZShmMut(this.library_, handle, length)
+        return newZShmMut(this.library_, handle, length)
     }
 
     /** Allocates without blocking the JS thread; with BlockOn (the default here), waits for room. */
@@ -86,7 +85,7 @@ export class ShmProvider {
         if (handle === 0n) {
             throw new Error(`could not allocate ${length} bytes of shared memory`)
         }
-        return new ZShmMut(this.library_, handle, length)
+        return newZShmMut(this.library_, handle, length)
     }
 
     /** Free bytes in the pool. */
@@ -129,12 +128,9 @@ function lastError(library: NativeLibrary): string {
 export class ZShmMut {
     private view_: Uint8Array<ArrayBuffer> | undefined
 
-    /** @internal */
-    constructor(
-        /** @internal */
-        readonly library_: NativeLibrary,
-        /** @internal */
-        readonly handle_: bigint,
+    private constructor(
+        private readonly library_: NativeLibrary,
+        private readonly handle_: bigint,
         private readonly length_: number,
     ) {
         bufferRegistry.register(this, { library: library_, handle: handle_ }, this)
@@ -166,8 +162,8 @@ export class ZShmMut {
         return !this.consumed_
     }
 
-    /** @internal the native side now owns the memory: cut JS's access to it */
-    markConsumed_(): void {
+    /** the native side now owns the memory: cut JS's access to it */
+    private markConsumed_(): void {
         this.consumed_ = true
         bufferRegistry.unregister(this)
         detach(this.view_)
@@ -192,4 +188,9 @@ function detach(view: Uint8Array<ArrayBuffer> | undefined) {
             // not detachable; JS must just not use it any more
         }
     }
+}
+
+// ZShmMut's constructor is private to keep the native types out of the public API
+function newZShmMut(library: NativeLibrary, handle: bigint, length: number): ZShmMut {
+    return new (ZShmMut as unknown as new (library: NativeLibrary, handle: bigint, length: number) => ZShmMut)(library, handle, length)
 }
