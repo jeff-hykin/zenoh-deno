@@ -85,10 +85,16 @@ const routerConfig = {
 }
 const configPath = `${zenohdDirectory}/test_router.json5`
 Deno.writeTextFileSync(configPath, JSON.stringify(routerConfig))
-const router = new Deno.Command(zenohd, { args: ["-c", configPath], stdout: "null", stderr: "piped" }).spawn()
-// keep reading stderr so zenohd never blocks on a full pipe; kept for the failure message
+const router = new Deno.Command(zenohd, { args: ["-c", configPath], stdout: "piped", stderr: "piped" }).spawn()
+// keep reading zenohd's output (it logs to stdout) so it never blocks on a full pipe; kept for the failure message
 const routerLog: string[] = []
-const routerLogDone = router.stderr.pipeThrough(new TextDecoderStream()).pipeTo(new WritableStream({ write: (chunk) => void routerLog.push(chunk) }))
+const keep = new WritableStream<string>({ write: (chunk) => void routerLog.push(chunk) })
+const routerLogDone = Promise.all([
+    router.stdout.pipeThrough(new TextDecoderStream()).pipeTo(new WritableStream({ write: (chunk) => void routerLog.push(chunk) })),
+    router.stderr.pipeThrough(new TextDecoderStream()).pipeTo(keep),
+])
+let routerExit: Deno.CommandStatus | undefined
+router.status.then((status) => (routerExit = status))
 
 let failed = false
 try {
@@ -101,9 +107,11 @@ try {
         } catch (error) {
             if (attempt > 300) {
                 // say why zenohd did not come up
-                router.kill()
+                if (!routerExit) {
+                    router.kill()
+                }
                 await routerLogDone.catch(() => {})
-                console.error(`zenohd did not open its ports:\n${routerLog.join("")}`)
+                console.error(`zenohd did not open its ports (${routerExit ? `it exited with ${routerExit.code}` : "still running"}):\n${routerLog.join("")}`)
                 throw error
             }
             await new Promise((resolve) => setTimeout(resolve, 100))
@@ -126,7 +134,9 @@ try {
         }
     }
 } finally {
-    router.kill()
+    if (!routerExit) {
+        router.kill()
+    }
     await router.status
 }
 Deno.exit(failed ? 1 : 0)
