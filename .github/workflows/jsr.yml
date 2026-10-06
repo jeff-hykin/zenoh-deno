@@ -22,7 +22,14 @@ jobs:
           deno-version: v2.x
       - id: version
         run: echo "version=$(deno eval 'console.log(JSON.parse(Deno.readTextFileSync("deno.json")).version)')" >> "$GITHUB_OUTPUT"
-      - run: deno publish
+      - name: publish (unless this version is already on JSR)
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          if curl -sf "https://api.jsr.io/scopes/robotics/packages/zenoh-deno/versions/$version" > /dev/null; then
+            echo "@robotics/zenoh-deno@$version is already published"
+          else
+            deno publish
+          fi
 
   verify:
     name: verify ${{ matrix.runner }}
@@ -59,4 +66,5 @@ jobs:
               await sub.undeclare(); provider.close(); await a.close(); await b.close()
           }
           TS
-          deno run -A roundtrip.ts
+          # Deno skips JSR versions younger than a day by default; this one was just published
+          deno run -A --minimum-dependency-age=0 roundtrip.ts

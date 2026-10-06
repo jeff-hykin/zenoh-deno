@@ -91,4 +91,5 @@ jobs:
               await sub.undeclare(); provider.close(); await a.close(); await b.close()
           }
           TS
-          deno run -A roundtrip.ts
+          # Deno skips JSR versions younger than a day by default; this one was just published
+          deno run -A --minimum-dependency-age=0 roundtrip.ts
