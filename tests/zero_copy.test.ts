@@ -23,9 +23,14 @@ async function receive(subscriberSession: Session, key: string, publish: () => P
     const subscriber = await subscriberSession.declareSubscriber(key, { handler: (sample) => resolve(sample) })
     await new Promise((r) => setTimeout(r, 300))
     await publish()
-    const sample = await received
-    await subscriber.undeclare()
-    return sample
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error(`no sample on ${key} within 10 s`)), 10_000)))
+    try {
+        return await Promise.race([received, timeout])
+    } finally {
+        clearTimeout(timer)
+        await subscriber.undeclare()
+    }
 }
 
 Deno.test({ name: "zero-copy: small payloads are copied, big ones are views on native memory", ignore: !native }, async () => {

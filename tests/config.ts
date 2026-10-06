@@ -2,7 +2,7 @@
 // plugin) and runs the suite twice: in-process sessions that are clients of that router (native),
 // and zenoh-ts's own way, over the plugin's websocket (ws).
 
-import { Config } from "../mod.ts"
+import { Config, initLog } from "../mod.ts"
 import { setDefaultZenohVersion_ } from "../lib/native/library.ts"
 import { loadNative } from "../lib/native/ffi.ts"
 
@@ -13,6 +13,12 @@ if (TEST_ZENOH_VERSION) {
     setDefaultZenohVersion_(TEST_ZENOH_VERSION)
     // libraries stay loaded for the life of the process; load it outside any test's leak check
     await loadNative(TEST_ZENOH_VERSION)
+}
+
+// ZENOH_DENO_TEST_LOG=zenoh=debug (a tracing filter) turns on zenoh's own logging for a run
+const testLog = Deno.env.get("ZENOH_DENO_TEST_LOG")
+if (testLog) {
+    await initLog(testLog, TEST_ZENOH_VERSION)
 }
 
 export const ROUTER_TCP = Deno.env.get("ZENOH_DENO_TEST_ROUTER") ?? "tcp/127.0.0.1:17447"

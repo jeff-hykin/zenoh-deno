@@ -63,6 +63,7 @@ jobs:
     name: test ${{ matrix.platform }} zenoh ${{ matrix.zenoh }}
     needs: build
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
