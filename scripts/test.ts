@@ -77,9 +77,10 @@ const routerConfig = {
     // non-Deno zenoh nodes for tests/interop.test.ts: zenohd's REST plugin publishes, its storage answers queries
     plugins_loading: { enabled: true, search_dirs: [zenohdDirectory] },
     plugins: {
-        rest: { http_port: "18000" },
+        // "<ip>:<port>": the default [::] is IPv6-only on Windows, where 127.0.0.1 is then refused
+        rest: { http_port: "127.0.0.1:18000" },
         storage_manager: { storages: { interop: { key_expr: "interop/storage/**", volume: "memory" } } },
-        ...(mode === "native" ? {} : { remote_api: { websocket_port: "10000" } }),
+        ...(mode === "native" ? {} : { remote_api: { websocket_port: "127.0.0.1:10000" } }),
     },
     timestamping: { enabled: { router: true, peer: true, client: true } },
 }
@@ -107,8 +108,10 @@ try {
         } catch (error) {
             if (attempt > 300) {
                 // say why zenohd did not come up
-                if (!routerExit) {
+                try {
                     router.kill()
+                } catch {
+                    // already gone
                 }
                 await routerLogDone.catch(() => {})
                 console.error(`zenohd did not open its ports (${routerExit ? `it exited with ${routerExit.code}` : "still running"}):\n${routerLog.join("")}`)
@@ -134,8 +137,10 @@ try {
         }
     }
 } finally {
-    if (!routerExit) {
+    try {
         router.kill()
+    } catch {
+        // already gone
     }
     await router.status
 }
