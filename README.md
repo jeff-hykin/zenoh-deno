@@ -1,6 +1,6 @@
 # zenoh-deno
 
-[zenoh](https://zenoh.io) for Deno. It has the API of [zenoh-ts](https://github.com/eclipse-zenoh/zenoh-ts),
+[zenoh](https://zenoh.io) for Deno - including zero-copy transport. It has the API of [zenoh-ts](https://github.com/eclipse-zenoh/zenoh-ts),
 but zenoh runs inside the Deno process (a Rust library loaded with `Deno.dlopen`) instead of behind a
 zenohd router with the remote-api plugin. A Deno program is then a zenoh node like any Rust, C or Python
 one: it can be a peer, a client or a router, it can listen and scout, and it can use shared memory.
