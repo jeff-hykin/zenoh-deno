@@ -72,24 +72,25 @@ jobs:
         shell: bash
         run: |
           cat > roundtrip.ts <<'TS'
-          import { Config, open, ShmProvider, ZENOH_VERSIONS } from "jsr:@robotics/zenoh-deno@${{ inputs.version }}"
-          for (const zenohVersion of ZENOH_VERSIONS) {
-              const config = (extra: object) => Config.fromObject({ mode: "peer", scouting: { multicast: { enabled: false } }, ...extra })
-              const a = await open(config({ listen: { endpoints: ["tcp/127.0.0.1:7449"] } }), { zenohVersion })
-              const b = await open(config({ connect: { endpoints: ["tcp/127.0.0.1:7449"] }, listen: { endpoints: [] } }), { zenohVersion })
-              const got: string[] = []
-              const sub = await b.declareSubscriber("verify/**", { handler: (s) => got.push(`${s.payload().toString()}:${s.payload().isShm()}`) })
-              await new Promise((r) => setTimeout(r, 500))
-              await a.put("verify/plain", "hello")
-              const provider = await ShmProvider.create(1 << 20, { zenohVersion })
-              const buffer = provider.alloc(5)
-              buffer.bytes().set(new TextEncoder().encode("world"))
-              await a.put("verify/shm", buffer)
-              for (let i = 0; i < 50 && got.length < 2; i++) await new Promise((r) => setTimeout(r, 100))
-              console.log(zenohVersion, got)
-              if (got.join(",") !== "hello:false,world:true") throw new Error(`zenoh ${zenohVersion}: got ${got}`)
-              await sub.undeclare(); provider.close(); await a.close(); await b.close()
-          }
+          import { Config, open, ShmProvider } from "jsr:@robotics/zenoh-deno@${{ inputs.version }}"
+          const zenohVersion = Deno.args[0]
+          const config = (extra: object) => Config.fromObject({ mode: "peer", scouting: { multicast: { enabled: false } }, ...extra })
+          const a = await open(config({ listen: { endpoints: ["tcp/127.0.0.1:7449"] } }), { zenohVersion })
+          const b = await open(config({ connect: { endpoints: ["tcp/127.0.0.1:7449"] }, listen: { endpoints: [] } }), { zenohVersion })
+          const got: string[] = []
+          const sub = await b.declareSubscriber("verify/**", { handler: (s) => got.push(`${s.payload().toString()}:${s.payload().isShm()}`) })
+          await new Promise((r) => setTimeout(r, 500))
+          await a.put("verify/plain", "hello")
+          const provider = await ShmProvider.create(1 << 20, { zenohVersion })
+          const buffer = provider.alloc(5)
+          buffer.bytes().set(new TextEncoder().encode("world"))
+          await a.put("verify/shm", buffer)
+          for (let i = 0; i < 50 && got.length < 2; i++) await new Promise((r) => setTimeout(r, 100))
+          console.log(zenohVersion, got)
+          if (got.join(",") !== "hello:false,world:true") throw new Error(`zenoh ${zenohVersion}: got ${got}`)
+          await sub.undeclare(); provider.close(); await a.close(); await b.close()
           TS
-          # Deno skips JSR versions younger than a day by default; this one was just published
-          deno run -A --minimum-dependency-age=0 roundtrip.ts
+          # one process per zenoh version, as an app would run; Deno skips JSR versions younger than a day by default
+          for zenoh in 1.10.1 1.6.2; do
+            deno run -A --minimum-dependency-age=0 roundtrip.ts "$zenoh"
+          done
