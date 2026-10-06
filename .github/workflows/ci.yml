@@ -1,0 +1,117 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  build:
+    name: build ${{ matrix.platform }} zenoh ${{ matrix.zenoh }}
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        zenoh: ["1.10.1", "1.6.2"]
+        platform: [linux-x86_64, linux-aarch64, darwin-aarch64, darwin-x86_64, windows-x86_64]
+        include:
+          # Linux builds run in manylinux_2_28 (glibc 2.28) so the library loads on older distros too
+          - { platform: linux-x86_64, runner: ubuntu-24.04, container: "quay.io/pypa/manylinux_2_28_x86_64" }
+          - { platform: linux-aarch64, runner: ubuntu-24.04-arm, container: "quay.io/pypa/manylinux_2_28_aarch64" }
+          - { platform: darwin-aarch64, runner: macos-15 }
+          - { platform: darwin-x86_64, runner: macos-15-intel }
+          - { platform: windows-x86_64, runner: windows-2025 }
+    steps:
+      - uses: actions/checkout@v5
+      - name: rust (container)
+        if: matrix.container
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: rust
+        if: ${{ !matrix.container }}
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.platform }}-${{ matrix.zenoh }}
+          workspaces: native/zenoh-${{ matrix.zenoh }} -> ../../target
+      - name: build
+        shell: bash
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+        run: |
+          cargo build --release --locked --manifest-path native/zenoh-${{ matrix.zenoh }}/Cargo.toml --target-dir target
+          stem="zenoh_deno_$(echo ${{ matrix.zenoh }} | tr . _)"
+          case "${{ matrix.platform }}" in
+            windows-*) built="target/release/$stem.dll"; file="$stem-${{ matrix.platform }}.dll" ;;
+            darwin-*) built="target/release/lib$stem.dylib"; file="lib$stem-${{ matrix.platform }}.dylib" ;;
+            *) built="target/release/lib$stem.so"; file="lib$stem-${{ matrix.platform }}.so" ;;
+          esac
+          mkdir -p dist
+          cp "$built" "dist/$file"
+          echo "FILE=$file" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ${{ env.FILE }}
+          path: dist/${{ env.FILE }}
+          if-no-files-found: error
+
+  test:
+    name: test ${{ matrix.platform }} zenoh ${{ matrix.zenoh }}
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        zenoh: ["1.10.1", "1.6.2"]
+        platform: [linux-x86_64, linux-aarch64, darwin-aarch64, darwin-x86_64, windows-x86_64]
+        include:
+          - { platform: linux-x86_64, runner: ubuntu-24.04 }
+          - { platform: linux-aarch64, runner: ubuntu-24.04-arm }
+          - { platform: darwin-aarch64, runner: macos-15 }
+          - { platform: darwin-x86_64, runner: macos-15-intel }
+          - { platform: windows-x86_64, runner: windows-2025 }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: "*zenoh_deno_*-${{ matrix.platform }}.*"
+          path: dist
+          merge-multiple: true
+      - name: put the built libraries where a checkout looks for them
+        shell: bash
+        run: |
+          mkdir -p target/release
+          for file in dist/*; do
+            name=$(basename "$file")
+            cp "$file" "target/release/${name/-${{ matrix.platform }}/}"
+          done
+          ls target/release
+      - name: test against zenohd ${{ matrix.zenoh }}, in-process and over zenoh-ts's websocket
+        shell: bash
+        env:
+          NO_COLOR: "1"
+        # every run must end with its summary line (a process that dies quietly can still exit 0)
+        run: |
+          deno run -A scripts/test.ts --zenoh ${{ matrix.zenoh }} 2>&1 | tee test-output.txt
+          expected=$(grep -o "summary-lines-expected::[0-9]*" test-output.txt | cut -d: -f3)
+          test "$(grep -cE "^ok \\| [0-9]+ passed \\| 0 failed" test-output.txt)" = "$expected"
+
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno check mod.ts ext.ts
+      - name: no node-isms
+        run: |
+          ! grep -rnE "from ['\"](node:|npm:)|require\(" mod.ts ext.ts lib/
+      - run: deno publish --dry-run

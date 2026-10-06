@@ -1,0 +1,94 @@
+name: release
+
+# Builds and tests every platform and zenoh version, commits the binaries' checksums and the version,
+# tags that commit vX.Y.Z, attaches the binaries to the GitHub release of that tag, publishes to JSR,
+# then checks that the published package works on every platform.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "version to release, e.g. 0.1.0"
+        required: true
+
+permissions:
+  contents: write
+  id-token: write # JSR publishing (the package must be linked to this repository on jsr.io)
+
+concurrency: release
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: ci
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: v${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: "*zenoh_deno_*"
+          path: dist
+          merge-multiple: true
+      - name: checksums and version
+        run: deno run --allow-read --allow-write scripts/stamp_release.ts "${{ inputs.version }}" dist
+      - name: commit, tag, release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ inputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/native/binary_checksums.ts lib/version.ts deno.json
+          git commit -m "release v$version"
+          git tag "v$version"
+          git push origin "HEAD:${GITHUB_REF_NAME}" "v$version"
+          (cd dist && sha256sum * > SHA256SUMS)
+          gh release create "v$version" dist/* --title "v$version" --notes "Prebuilt native libraries for @robotics/zenoh-deno $version (zenoh 1.10.1 and 1.6.2). \`import { open } from \"jsr:@robotics/zenoh-deno@$version\"\` downloads the right one and checks its sha256."
+      - name: publish to JSR
+        run: deno publish
+
+  verify:
+    name: verify ${{ matrix.runner }}
+    needs: publish
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]
+    steps:
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: the published package downloads its binary and does a round trip, for each zenoh version
+        shell: bash
+        run: |
+          cat > roundtrip.ts <<'TS'
+          import { Config, open, ShmProvider, ZENOH_VERSIONS } from "jsr:@robotics/zenoh-deno@${{ inputs.version }}"
+          for (const zenohVersion of ZENOH_VERSIONS) {
+              const config = (extra: object) => Config.fromObject({ mode: "peer", scouting: { multicast: { enabled: false } }, ...extra })
+              const a = await open(config({ listen: { endpoints: ["tcp/127.0.0.1:7449"] } }), { zenohVersion })
+              const b = await open(config({ connect: { endpoints: ["tcp/127.0.0.1:7449"] }, listen: { endpoints: [] } }), { zenohVersion })
+              const got: string[] = []
+              const sub = await b.declareSubscriber("verify/**", { handler: (s) => got.push(`${s.payload().toString()}:${s.payload().isShm()}`) })
+              await new Promise((r) => setTimeout(r, 500))
+              await a.put("verify/plain", "hello")
+              const provider = await ShmProvider.create(1 << 20, { zenohVersion })
+              const buffer = provider.alloc(5)
+              buffer.bytes().set(new TextEncoder().encode("world"))
+              await a.put("verify/shm", buffer)
+              for (let i = 0; i < 50 && got.length < 2; i++) await new Promise((r) => setTimeout(r, 100))
+              console.log(zenohVersion, got)
+              if (got.join(",") !== "hello:false,world:true") throw new Error(`zenoh ${zenohVersion}: got ${got}`)
+              await sub.undeclare(); provider.close(); await a.close(); await b.close()
+          }
+          TS
+          deno run -A roundtrip.ts

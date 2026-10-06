@@ -1,0 +1,164 @@
+//
+// Copyright (c) 2024 ZettaScale Technology
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0, or the Apache License, Version 2.0
+// which is available at https://www.apache.org/licenses/LICENSE-2.0.
+//
+// SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+//
+// Contributors:
+//   ZettaScale Zenoh Team, <zenoh@zettascale.tech>
+//
+import { IntoZBytes, ZBytes } from "./z_bytes.ts";
+import { KeyExpr } from "./key_expr.ts";
+import { IntoParameters, Parameters, Reply } from "./query.ts";
+import { ChannelReceiver, FifoChannel, Handler, intoCbDropReceiver } from "./channels.ts";
+import { Encoding, IntoEncoding } from "./encoding.ts";
+import { SessionInner, QuerierId } from "./session_inner.ts";
+import { CongestionControl, Priority, ReplyKeyExpr } from "./enums.ts";
+import { MatchingListener, MatchingListenerOptions, MatchingStatus } from "./matching.ts";
+import { CancellationToken } from "./cancellation_token.ts";
+
+/**
+ * Options for a Querier Get operation 
+ * @prop {IntoParameters=} parameters - Optional query parameters
+ * @prop {IntoEncoding=} encoding - Encoding type of payload 
+ * @prop {IntoZBytes=} payload - Payload associated with the query
+ * @prop {IntoZBytes=} attachment - Additional Data sent with the query
+ * @prop {Handler<Reply>=} handler - A reply handler
+ * @prop {CancellationToken=} cancellationToken - Token to interrupt the query. Warning: This API has been marked as unstable: it works as advertised, but it may be changed in a future release.
+*/
+export interface QuerierGetOptions {
+    parameters?: IntoParameters,
+    encoding?: IntoEncoding,
+    payload?: IntoZBytes,
+    attachment?: IntoZBytes,
+    handler?: Handler<Reply>,
+    cancellationToken?: CancellationToken,
+}
+
+/**
+ * Queryable class used to receive Query's from the network and handle Reply's
+ * created by Session.declare_queryable
+ */
+export class Querier {
+    /** 
+     * @ignore
+     */
+    async [Symbol.asyncDispose]() {
+        await this.undeclare();
+    }
+
+    /** 
+     * @ignore
+     */
+    constructor(
+        private session: SessionInner,
+        private querierId: QuerierId,
+        private keyExpr_: KeyExpr,
+        private congestionControl_: CongestionControl,
+        private priority_: Priority,
+        private acceptReplies_: ReplyKeyExpr,
+    ) { }
+
+    /**
+     * Undeclares Queryable
+     * @returns void
+     */
+    async undeclare() {
+        await this.session.undeclareQuerier(this.querierId);
+    }
+
+    /**
+     * returns key expression for this Querier
+     * @returns KeyExpr
+     */
+    keyExpr() {
+        return this.keyExpr_;
+    }
+
+    /**
+     * returns Congestion Control for this Querier
+     * @returns CongestionControl
+     */
+    congestionControl() {
+        return this.congestionControl_;
+    }
+
+    /**
+     * returns Priority for this Querier
+     * @returns Priority
+     */
+    priority() {
+        return this.priority_;
+    }
+
+    /**
+     * returns ReplyKeyExpr for this Querier
+     * @returns ReplyKeyExpr
+     */
+    acceptReplies() {
+        return this.acceptReplies_;
+    }
+
+    /**
+     * Issue a Get request on this querier
+     * @returns Promise <Receiever | void>
+     */
+    async get(getOpts?: QuerierGetOptions): Promise<ChannelReceiver<Reply> | undefined> {
+
+        let handler = getOpts?.handler ?? new FifoChannel<Reply>(256);
+        let [callback, drop, receiver] = intoCbDropReceiver(handler);
+        let cancellationToken = getOpts?.cancellationToken;
+        if (cancellationToken?.isCancelled() ?? false) {
+            drop();
+            return receiver;
+        }
+        let getId = await this.session.querierGet(
+            {
+                querierId: this.querierId,
+                parameters: getOpts?.parameters ? new Parameters(getOpts.parameters).toString() : "",
+                payload: getOpts?.payload ? new ZBytes(getOpts.payload) : undefined,
+                encoding: getOpts?.encoding ? Encoding.from(getOpts.encoding) : undefined,
+                attachment: getOpts?.attachment ? new ZBytes(getOpts.attachment) : undefined,
+            },
+            { callback, drop }
+        );
+        cancellationToken?.addCancelAction(() => this.session.cancelQuery(getId));
+        return receiver;
+    }
+
+    /**
+     * Declares a new matching listener, notifying when querier's `Matching Status` changes.
+     *
+     * @remarks
+     *  If a Matching listener is created with a callback, it cannot be simultaneously polled for new values.
+     * 
+     * @param {MatchingListenerOptions} matchingListenerOptions - optional additional parameters for matching listener.
+     * 
+     * @returns Matching listener
+     */
+    async matchingListener(
+        matchingListenerOptions?: MatchingListenerOptions
+    ): Promise<MatchingListener> {
+        const handler = matchingListenerOptions?.handler ?? new FifoChannel<MatchingStatus>(256);
+        let [callback, drop, receiver] = intoCbDropReceiver(handler);
+
+        const listenerId = await this.session.querierDeclareMatchingListener(
+            this.querierId,
+            { callback, drop }
+        );
+        return new MatchingListener(this.session, listenerId, receiver);
+    }
+
+    /**
+     * Gets querier matching status - i.e. if there are any queryables matching its key expression and target.
+     * 
+     * @returns Querier matching status
+     */
+    async matchingStatus(): Promise<MatchingStatus> {
+        return await this.session.querierGetMatchingStatus(this.querierId);
+    }
+}

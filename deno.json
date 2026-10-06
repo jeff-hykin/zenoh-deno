@@ -1,0 +1,21 @@
+{
+    "name": "@robotics/zenoh-deno",
+    "version": "0.0.0",
+    "license": "EPL-2.0 OR Apache-2.0",
+    "exports": {
+        ".": "./mod.ts",
+        "./ext": "./ext.ts"
+    },
+    "publish": {
+        "include": ["mod.ts", "ext.ts", "lib/**/*.ts", "README.md", "LICENSE", "NOTICE.md", "deno.json"]
+    },
+    "tasks": {
+        "build": "deno run -A scripts/build.ts",
+        "test": "deno test --allow-ffi --allow-env --allow-read --allow-write --allow-net --allow-run --allow-sys tests/"
+    },
+    "fmt": {
+        "indentWidth": 4,
+        "semiColons": false,
+        "lineWidth": 160
+    }
+}

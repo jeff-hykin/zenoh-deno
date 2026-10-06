@@ -1,0 +1,256 @@
+//
+// Copyright (c) 2024 ZettaScale Technology
+//
+// This program and the accompanying materials are made available under the
+// terms of the Eclipse Public License 2.0 which is available at
+// http://www.eclipse.org/legal/epl-2.0, or the Apache License, Version 2.0
+// which is available at https://www.apache.org/licenses/LICENSE-2.0.
+//
+// SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+//
+// Contributors:
+//   ZettaScale Zenoh Team, <zenoh@zettascale.tech>
+//
+import { KeyExpr } from "./key_expr.ts";
+import { IntoZBytes, ZBytes } from "./z_bytes.ts";
+import { Sample } from "./sample.ts";
+import { Encoding, IntoEncoding } from "./encoding.ts";
+import { Timestamp } from "./timestamp.ts";
+import { ChannelReceiver, FifoChannel, intoCbDropReceiver } from "./channels.ts";
+import { SessionInner, PublisherId, SubscriberId, SubscriberKind } from "./session_inner.ts";
+import { PublisherDelete, PublisherProperties, PublisherPut } from "./message.ts";
+import { CongestionControl, Priority, Reliability } from "./enums.ts";
+import { MatchingListener, MatchingListenerOptions, MatchingStatus } from "./matching.ts";
+
+
+// ███████ ██    ██ ██████  ███████  ██████ ██████  ██ ██████  ███████ ██████
+// ██      ██    ██ ██   ██ ██      ██      ██   ██ ██ ██   ██ ██      ██   ██
+// ███████ ██    ██ ██████  ███████ ██      ██████  ██ ██████  █████   ██████
+//      ██ ██    ██ ██   ██      ██ ██      ██   ██ ██ ██   ██ ██      ██   ██
+// ███████  ██████  ██████  ███████  ██████ ██   ██ ██ ██████  ███████ ██   ██
+
+
+/**
+ * Class to represent a Subscriber on Zenoh, 
+ * created via calling `declare_subscriber()` on a `session`
+ */
+
+export class Subscriber {
+    /**
+     * @ignore 
+     */
+    async [Symbol.asyncDispose]() {
+        await this.undeclare();
+    }
+    /**
+     * @ignore 
+     */
+    constructor(
+        private session: SessionInner,
+        private kind: SubscriberKind,
+        private id: SubscriberId,
+        private keyExpr_: KeyExpr,
+        private receiver_?: ChannelReceiver<Sample>,
+    ) { }
+
+    /**
+     * returns the key expression of an object
+     * @returns KeyExpr
+     */
+    keyExpr(): KeyExpr {
+        return this.keyExpr_
+    }
+    /**
+     * returns a sample receiver for non-callback subscriber, undefined otherwise.
+     *
+     * @returns ChannelReceiver<Sample> | undefined
+     */
+    receiver(): ChannelReceiver<Sample> | undefined {
+        return this.receiver_;
+    }
+
+    /**
+     * Undeclares a subscriber on the session
+     *
+     */
+    async undeclare() {
+        if (this.kind === SubscriberKind.Subscriber) {
+            await this.session.undeclareSubscriber(this.id);
+        } else {
+            await this.session.undeclareLivelinessSubscriber(this.id);
+        }
+    }
+}
+
+// ██████  ██    ██ ██████  ██      ██ ███████ ██   ██ ███████ ██████
+// ██   ██ ██    ██ ██   ██ ██      ██ ██      ██   ██ ██      ██   ██
+// ██████  ██    ██ ██████  ██      ██ ███████ ███████ █████   ██████
+// ██      ██    ██ ██   ██ ██      ██      ██ ██   ██ ██      ██   ██
+// ██       ██████  ██████  ███████ ██ ███████ ██   ██ ███████ ██   ██
+
+/**
+ * @param {IntoEncoding=} encoding  - Encoding parameter for Zenoh data
+ * @param {IntoZBytes=} attachment - optional extra data to send with Payload
+ */
+export interface PublisherPutOptions {
+    encoding?: IntoEncoding,
+    attachment?: IntoZBytes,
+    timestamp?: Timestamp;
+}
+
+/**
+ * @param {IntoZBytes=} attachment - optional extra data to send with Payload
+ */
+export interface PublisherDeleteOptions {
+    attachment?: IntoZBytes,
+    timestamp?: Timestamp
+}
+
+/**
+ * Class that represents a Zenoh Publisher, 
+ * created by calling `Session.declarePublisher()`
+ */
+export class Publisher {
+    /** 
+     * @ignore 
+     */
+    async [Symbol.asyncDispose]() {
+        await this.undeclare();
+    }
+
+    /**
+     * @ignore 
+     */
+    constructor(
+        private session: SessionInner,
+        private publisherId: PublisherId,
+        private properties: PublisherProperties,
+    ) { }
+
+    /**
+     * gets the Key Expression from Publisher
+     *
+     * @returns {KeyExpr} instance
+     */
+    keyExpr(): KeyExpr {
+        return this.properties.keyexpr;
+    }
+
+    /**
+     * Puts a payload on the publisher associated with this class instance
+     *
+     * @param {IntoZBytes} payload
+     * @param {PublisherPutOptions} putOptions
+     *
+     * @returns void
+     */
+    async put(
+        payload: IntoZBytes,
+        putOptions?: PublisherPutOptions,
+    ) {
+        await this.session.publisherPut(
+            new PublisherPut(
+                this.publisherId,
+                new ZBytes(payload),
+                putOptions?.encoding ? Encoding.from(putOptions.encoding) : undefined,
+                putOptions?.attachment ? new ZBytes(putOptions.attachment) : undefined,
+                putOptions?.timestamp
+            )
+        );
+    }
+
+    /**
+    * get Encoding declared for Publisher
+    *   
+    * @returns {Encoding}
+    */
+    encoding(): Encoding {
+        return this.properties.encoding;
+    }
+
+    /**
+    * get Priority declared for Publisher
+    *   
+    * @returns {Priority}
+    */
+    priority(): Priority {
+        return this.properties.qos.priority;
+    }
+
+    /**
+    * get Reliability declared for Publisher
+    *   
+    * @returns {Reliability}
+    */
+    reliability(): Reliability {
+        return this.properties.qos.reliability;
+    }
+
+    /**
+     * get Congestion Control declared for a Publisher
+     *   
+     * @returns {CongestionControl}
+     */
+    congestionControl(): CongestionControl {
+        return this.properties.qos.congestionControl;
+    }
+
+    /**
+     * 
+     * executes delete on publisher
+     * @param {PublisherDeleteOptions=} deleteOptions:  Options associated with a publishers delete
+     * @returns void
+     */
+    async delete(deleteOptions?: PublisherDeleteOptions) {
+        await this.session.publisherDelete(
+            new PublisherDelete(
+                this.publisherId,
+                deleteOptions?.attachment ? new ZBytes(deleteOptions.attachment) : undefined,
+                deleteOptions?.timestamp
+            )
+        )
+    }
+
+
+    /**
+     * Declares a new matching listener, notifying when publisher's `Matching Status` changes.
+     *
+     * @remarks
+     *  If a Matching listener is created with a callback, it cannot be simultaneously polled for new values.
+     * 
+     * @param {MatchingListenerOptions} matchingListenerOptions - optional additional parameters for matching listener.
+     * 
+     * @returns Matching listener
+     */
+    async matchingListener(
+        matchingListenerOptions?: MatchingListenerOptions
+    ): Promise<MatchingListener> {
+        const handler = matchingListenerOptions?.handler ?? new FifoChannel<MatchingStatus>(256);
+        let [callback, drop, receiver] = intoCbDropReceiver(handler);
+
+        const listenerId = await this.session.publisherDeclareMatchingListener(
+            this.publisherId,
+            { callback, drop }
+        );
+        return new MatchingListener(this.session, listenerId, receiver);
+    }
+
+    /**
+     * Gets publisher matching status - i.e. if there are any subscribers matching its key expression.
+     * 
+     * @returns Publisher matching status
+     */
+    async matchingStatus(): Promise<MatchingStatus> {
+        return await this.session.publisherGetMatchingStatus(this.publisherId);
+    }
+
+    /**
+     * undeclares publisher
+     *   
+     * @returns void
+     */
+    async undeclare() {
+        await this.session.undeclarePublisher(this.publisherId);
+    }
+
+}

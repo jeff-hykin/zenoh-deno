@@ -1,0 +1,37 @@
+[package]
+name = "zenoh-deno-1-6-2"
+version = "0.1.0"
+edition = "2021"
+license = "EPL-2.0 OR Apache-2.0"
+description = "The native side of @robotics/zenoh-deno: zenoh in-process for Deno, through Deno.dlopen"
+repository = "https://github.com/jeff-hykin/zenoh-deno"
+publish = false
+build = "../../build.rs"
+
+[lib]
+name = "zenoh_deno_1_6_2"
+path = "../../src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+zenoh = { version = "=1.6.2", features = ["unstable", "internal", "shared-memory"] }
+zenoh-ext = { version = "=1.6.2", features = ["unstable"] }
+zenoh-result = "=1.6.2"
+zenoh-keyexpr = "=1.6.2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+flume = "0.11"
+bytes = "1"
+lru = "0.14"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uhlc = { version = "0.8", default-features = false }
+uuid = { version = "1", features = ["v4"] }
+serde_json = "1"
+json5 = "0.4"
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+strip = true
+
+[workspace]
