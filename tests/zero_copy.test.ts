@@ -2,7 +2,10 @@
 // cross-process shared-memory path (which must beat copying).
 
 import { assert, assertEquals, assertThrows } from "jsr:@std/assert@1"
-import { Config, nativePayloadsAlive, open, Sample, Session, setZeroCopyThreshold, ShmProvider, ZBytes } from "../mod.ts"
+import { CongestionControl, Config, nativePayloadsAlive, open, Sample, Session, setZeroCopyThreshold, ShmProvider, ZBytes } from "../mod.ts"
+
+// big payloads must not be dropped when a slow runner's send queue is momentarily full
+const BLOCK = { congestionControl: CongestionControl.BLOCK }
 import { runOnce } from "../bench/shm_cross_process.ts"
 import { TEST_MODE, TEST_ZENOH_VERSION } from "./config.ts"
 
@@ -41,7 +44,7 @@ Deno.test({ name: "zero-copy: small payloads are copied, big ones are views on n
         assert(!small.payload().isZeroCopy())
 
         const bytes = new Uint8Array(1 << 20).map((_, i) => i % 251)
-        const big = await receive(b, "zc/big", () => a.put("zc/big", bytes))
+        const big = await receive(b, "zc/big", () => a.put("zc/big", bytes, BLOCK))
         assert(big.payload().isZeroCopy(), "a 1 MiB payload should be a view, not a copy")
         assert(!big.payload().isShm())
         assertEquals(big.payload().toBytes(), bytes)
@@ -54,7 +57,7 @@ Deno.test({ name: "zero-copy: small payloads are copied, big ones are views on n
         assertEquals(await nativePayloadsAlive(TEST_ZENOH_VERSION), alive - 1)
 
         await setZeroCopyThreshold(64, TEST_ZENOH_VERSION)
-        const medium = await receive(b, "zc/medium", () => a.put("zc/medium", new Uint8Array(100)))
+        const medium = await receive(b, "zc/medium", () => a.put("zc/medium", new Uint8Array(100), BLOCK))
         assert(medium.payload().isZeroCopy(), "the threshold is adjustable")
     } finally {
         await setZeroCopyThreshold(4096, TEST_ZENOH_VERSION)
@@ -95,7 +98,7 @@ Deno.test({ name: "zero-copy: shared-memory publishing hands the buffer over wit
         const buffer = provider.alloc(1 << 20)
         const view = buffer.bytes()
         view.fill(42)
-        const sample = await receive(b, "zc/shm", () => a.put("zc/shm", buffer))
+        const sample = await receive(b, "zc/shm", () => a.put("zc/shm", buffer, BLOCK))
         assert(sample.payload().isShm(), "received as shared memory")
         assertEquals(sample.payload().len(), 1 << 20)
         assertEquals(sample.payload().toBytes()[12345], 42)
@@ -105,7 +108,7 @@ Deno.test({ name: "zero-copy: shared-memory publishing hands the buffer over wit
         assertThrows(() => buffer.bytes())
 
         // through a publisher, and as a ZBytes
-        const publisher = await a.declarePublisher("zc/shm2")
+        const publisher = await a.declarePublisher("zc/shm2", BLOCK)
         const second = provider.alloc(1000)
         second.bytes().fill(7)
         const viaPublisher = await receive(b, "zc/shm2", () => publisher.put(new ZBytes(second)))
@@ -127,9 +130,9 @@ Deno.test({ name: "zero-copy: a received payload is re-published without copying
     const [a, b] = await pair()
     try {
         const original = new Uint8Array(1 << 16).map((_, i) => i % 13)
-        const first = await receive(b, "zc/forward/in", () => a.put("zc/forward/in", original))
+        const first = await receive(b, "zc/forward/in", () => a.put("zc/forward/in", original, BLOCK))
         assert(first.payload().isZeroCopy())
-        const forwarded = await receive(a, "zc/forward/out", () => b.put("zc/forward/out", first.payload()))
+        const forwarded = await receive(a, "zc/forward/out", () => b.put("zc/forward/out", first.payload(), BLOCK))
         assertEquals(forwarded.payload().toBytes(), original)
     } finally {
         await a.close()
