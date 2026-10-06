@@ -15,7 +15,8 @@ function option(name: string, fallback: string): string {
 const zenohVersion = option("--zenoh", "1.10.1")
 // zenoh-ts's TS speaks the 1.10.1 remote-api protocol, so the ws suite runs only against that plugin
 const mode = option("--mode", zenohVersion === "1.10.1" ? "both" : "native")
-const root = new URL("..", import.meta.url).pathname
+// a file path on every OS (URL.pathname gives "/D:/..." on Windows)
+const root = decodeURIComponent(new URL("..", import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, "$1")
 const zenohdDirectory = `${root}.zenohd/${zenohVersion}`
 
 const TRIPLES: Record<string, string> = {

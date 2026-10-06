@@ -29,7 +29,7 @@ function sleep(ms: number) {
 }
 
 function timeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
-    let timeoutId: number;
+    let timeoutId: ReturnType<typeof setTimeout>;
     const timeoutPromise = new Promise<T>((_, reject) => {
         timeoutId = setTimeout(() => reject(new Error(message)), ms);
     });

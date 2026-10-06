@@ -26,7 +26,7 @@ export async function runOnce(mode: "shm" | "copy", sizeBytes: number, count: nu
     )
     const key = `bench/shm/${mode}`
     const child = new Deno.Command(Deno.execPath(), {
-        args: ["run", "-A", new URL("../tests/helpers/subscriber_process.ts", import.meta.url).pathname, endpoint, key, String(count), ...(zenohVersion ? [zenohVersion] : [])],
+        args: ["run", "-A", new URL("../tests/helpers/subscriber_process.ts", import.meta.url).href, endpoint, key, String(count), ...(zenohVersion ? [zenohVersion] : [])],
         stdout: "piped",
         stderr: "inherit",
     }).spawn()

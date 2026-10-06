@@ -135,7 +135,7 @@ export class SessionInner {
                     const s = InSample.deserialize(deserializer);
                     let subscriber = this.subscribers.get(s.subscriberId);
                     if (subscriber == undefined) {
-                        console.warn(`Received sample for inexistant subscriber ${s.subscriberId}`) 
+                        console.warn(`Received sample for inexistant subscriber ${s.subscriberId}: ${s.sample.payload().toString()}`) 
                     } else {
                         subscriber.callback(s.sample);
                     }

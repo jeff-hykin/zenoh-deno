@@ -115,6 +115,13 @@ the suite twice: once with in-process sessions, then over the websocket. The sui
 (`tests/upstream/`) plus this package's tests. Use `--zenoh 1.6.2` to run against zenohd 1.6.2 with that
 build. CI runs both versions on Linux (x86_64 and aarch64), macOS (Apple silicon and Intel) and Windows.
 
+## A zenoh fix
+
+zenoh 1.10.1 and 1.6.2 (and zenoh's main branch, as of 2026-10-06) have a routing bug. After a publisher
+is undeclared and the key's subscribers change, a client can silently drop its later puts on that key.
+The native libraries are built with [jeff-hykin/zenoh-vendor](https://github.com/jeff-hykin/zenoh-vendor),
+the published `zenoh` crate plus a small fix. Its README describes the bug.
+
 ## Building the library
 
 ```sh
