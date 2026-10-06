@@ -139,5 +139,5 @@ In a checkout, the module loads `target/release` (or `target/debug`) instead of 
 
 ## License
 
-EPL-2.0 OR Apache-2.0, like zenoh-ts. Most of the TypeScript in `lib/` and the Rust in
+EPL-2.0 OR Apache-2.0, like zenoh-ts (JSR lists it as Apache-2.0, one of the two). Most of the TypeScript in `lib/` and the Rust in
 `src/remote_state.rs` and `src/interface/` comes from zenoh-ts (Copyright ZettaScale Technology).
