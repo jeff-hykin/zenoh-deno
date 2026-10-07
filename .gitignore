@@ -1,3 +1,4 @@
 target/
 .zenohd/
 dist/
+lib/native/prebuilt/

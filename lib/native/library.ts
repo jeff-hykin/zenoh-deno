@@ -83,9 +83,10 @@ function filePath(url: URL): string {
 }
 
 /**
- * The path of the native library for `zenohVersion`: in a checkout of the repository, what
- * `cargo build` made; otherwise the cached download (fetched from the GitHub release and checked
- * against the sha256 recorded in this module on first use).
+ * The path of the native library for `zenohVersion`. When this module is a local file: what
+ * `cargo build` made (a checkout), else the release bundle's prebuilt/ next to this file (offline,
+ * e.g. nix). Otherwise the cached download from the GitHub release. Prebuilt and downloaded files
+ * are checked against the sha256 recorded in this module.
  */
 export async function libraryPath(zenohVersion: string): Promise<string> {
     if (!(ZENOH_VERSIONS as readonly string[]).includes(zenohVersion)) {
@@ -103,6 +104,16 @@ export async function libraryPath(zenohVersion: string): Promise<string> {
     const expected = CHECKSUMS[name]
     if (!expected) {
         throw new Error(`zenoh-deno ${VERSION} has no prebuilt library for ${platformName()} with zenoh ${zenohVersion}`)
+    }
+    if (import.meta.url.startsWith("file:")) {
+        const bundled = new URL(`./prebuilt/${name}`, import.meta.url)
+        if (exists(bundled)) {
+            const actual = await sha256(Deno.readFileSync(bundled))
+            if (actual !== expected) {
+                throw new Error(`zenoh-deno: ${filePath(bundled)} has sha256 ${actual}, expected ${expected}; refusing to load it`)
+            }
+            return filePath(bundled)
+        }
     }
     const directory = `${cacheDirectory()}/${VERSION}`
     const path = `${directory}/${name}`

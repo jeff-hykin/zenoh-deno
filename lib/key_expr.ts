@@ -17,32 +17,7 @@
 // ██  ██  ██         ██        ██       ██ ██  ██      ██   ██
 // ██   ██ ███████    ██        ███████ ██   ██ ██      ██   ██
 
-import { encoder, keyExprNative } from "./native/ffi.ts"
-
-// key expression rules come from zenoh itself, through the native library (zenoh-ts uses wasm)
-const native = await keyExprNative()
-
-function keyExprCall(operation: number, a: string, b: string = ""): number {
-    const aBytes = encoder.encode(a)
-    const bBytes = encoder.encode(b)
-    const result = native.symbols.zd_keyexpr(operation, aBytes, BigInt(aBytes.length), bBytes, BigInt(bBytes.length))
-    if (result < 0) {
-        throw new Error(native.resultText())
-    }
-    return result
-}
-
-function keyExprText(operation: number, a: string, b: string = ""): string {
-    keyExprCall(operation, a, b)
-    return native.resultText()
-}
-
-const new_key_expr = (ke: string) => keyExprCall(0, ke)
-const join = (a: string, b: string) => keyExprText(1, a, b)
-const concat = (a: string, b: string) => keyExprText(2, a, b)
-const includes = (a: string, b: string) => keyExprCall(3, a, b) === 1
-const intersects = (a: string, b: string) => keyExprCall(4, a, b) === 1
-const autocanonize = (ke: string) => keyExprText(5, ke)
+import { autocanonize, concat, includes, intersects, join, validate } from "./key_expr_rules.ts"
 
 export type IntoKeyExpr = KeyExpr | String | string;
 
@@ -64,10 +39,8 @@ export class KeyExpr {
         } else {
             ke = keyexpr;
         }
-        // `new_key_expr` calls the `key_expr::OwnedKeyExpr::new` in Rust
-        // if this function fails, the keyexpr is invalid, and an exception is thrown in Wasm and propagated here
-        // else the Key Expression is valid and we can store the string it represents in the class
-        new_key_expr(ke);
+        // throws if the key expression is invalid
+        validate(ke);
         this.inner_ = ke;
     }
 

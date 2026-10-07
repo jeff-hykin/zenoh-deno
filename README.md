@@ -36,7 +36,12 @@ Run with `deno run --allow-ffi --allow-read --allow-write --allow-net --allow-en
 On first use, the module downloads the prebuilt library for your OS, CPU and zenoh version from this
 repository's GitHub release. It checks the file against the sha256 recorded in the module, then caches it
 (`~/Library/Caches/zenoh-deno`, `~/.cache/zenoh-deno` or `%LOCALAPPDATA%\zenoh-deno`). After that it needs
-no network access.
+no network access. Only the zenoh version a program opens is downloaded and loaded.
+
+To use it with no network at all (a nix build, say), take `zenoh-deno-vX.Y.Z.tar.gz` from the release
+instead. It holds the module plus every platform's library (in `lib/native/prebuilt/`), and when you import
+its `mod.ts` by file path, the libraries are loaded from there. JSR can't carry them: they are too large,
+and Deno only downloads code from JSR.
 
 | Platform | zenoh 1.10.1 | zenoh 1.6.2 |
 |---|---|---|

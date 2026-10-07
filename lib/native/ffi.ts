@@ -92,16 +92,4 @@ export function loadNative(zenohVersion: string = defaultZenohVersion_()): Promi
     return library
 }
 
-/**
- * The library key expressions use: whichever was loaded first, else the default version.
- * Key expression rules are the same across zenoh 1.x.
- */
-let keyExprLibrary: NativeLibrary | undefined
-export async function keyExprNative(): Promise<NativeLibrary> {
-    if (!keyExprLibrary) {
-        keyExprLibrary = await (loaded.values().next().value ?? loadNative())
-    }
-    return keyExprLibrary
-}
-
 export { encoder, decoder }
