@@ -69,3 +69,13 @@ jobs:
           for zenoh in 1.10.1 1.6.2; do
             deno run -A --minimum-dependency-age=0 roundtrip.ts "$zenoh"
           done
+      - name: the release tarball does the same round trip with no network
+        shell: bash
+        run: |
+          version="${{ needs.publish.outputs.version }}"
+          bundle="zenoh-deno-v$version"
+          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/v$version/$bundle.tar.gz" | tar xz
+          sed "s|jsr:@robotics/zenoh-deno@$version|./$bundle/mod.ts|" roundtrip.ts > roundtrip_offline.ts
+          for zenoh in 1.10.1 1.6.2; do
+            deno run -A --deny-net roundtrip_offline.ts "$zenoh"
+          done

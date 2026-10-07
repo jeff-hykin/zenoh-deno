@@ -52,11 +52,12 @@ jobs:
           git tag "v$version"
           git push origin "HEAD:${GITHUB_REF_NAME}" "v$version"
           # everything in one tarball (the module + every platform's library), for builds without network (nix)
+          # (built outside the checkout: deno publish refuses a dirty tree)
           bundle="zenoh-deno-v$version"
-          mkdir -p "$bundle/lib/native/prebuilt"
-          cp -r mod.ts ext.ts lib README.md LICENSE NOTICE.md deno.json "$bundle/"
-          cp dist/*zenoh_deno_* "$bundle/lib/native/prebuilt/"
-          tar czf "dist/$bundle.tar.gz" "$bundle"
+          mkdir -p "$RUNNER_TEMP/$bundle/lib/native/prebuilt"
+          cp -r mod.ts ext.ts lib README.md LICENSE NOTICE.md deno.json "$RUNNER_TEMP/$bundle/"
+          cp dist/*zenoh_deno_* "$RUNNER_TEMP/$bundle/lib/native/prebuilt/"
+          tar czf "dist/$bundle.tar.gz" -C "$RUNNER_TEMP" "$bundle"
           (cd dist && sha256sum * > SHA256SUMS)
           gh release create "v$version" dist/* --title "v$version" --notes "Prebuilt native libraries for @robotics/zenoh-deno $version (zenoh 1.10.1 and 1.6.2). \`import { open } from \"jsr:@robotics/zenoh-deno@$version\"\` downloads the right one and checks its sha256; zenoh-deno-v$version.tar.gz has the module with every platform's library, for use without network."
       - name: publish to JSR
