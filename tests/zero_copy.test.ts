@@ -69,16 +69,20 @@ Deno.test({ name: "zero-copy: small payloads are copied, big ones are views on n
 Deno.test({ name: "zero-copy: views are freed once garbage-collected", ignore: !native }, async () => {
     // needs --expose-gc, so in a child process
     const script = `
-        import { Config, open, nativePayloadsAlive } from ${JSON.stringify(new URL("../mod.ts", import.meta.url).href)}
+        import { Config, CongestionControl, open, nativePayloadsAlive } from ${JSON.stringify(new URL("../mod.ts", import.meta.url).href)}
         const version = ${JSON.stringify(TEST_ZENOH_VERSION ?? null)} ?? undefined
         const config = (extra) => Config.fromObject({ mode: "peer", scouting: { multicast: { enabled: false } }, ...extra })
         const a = await open(config({ listen: { endpoints: ["tcp/127.0.0.1:${nextPort}"] } }), { zenohVersion: version })
         const b = await open(config({ connect: { endpoints: ["tcp/127.0.0.1:${nextPort++}"] }, listen: { endpoints: [] } }), { zenohVersion: version })
         let count = 0
         const sub = await b.declareSubscriber("gc/**", { handler: (s) => { count += s.payload().len() > 0 ? 1 : 0 } })
-        await new Promise((r) => setTimeout(r, 300))
-        for (let i = 0; i < 20; i++) await a.put("gc/x", new Uint8Array(1 << 16))
-        while (count < 20) await new Promise((r) => setTimeout(r, 10))
+        // put until 20 arrive: puts sent before the subscription reaches the publisher are lost
+        const deadline = Date.now() + 20_000
+        while (count < 20) {
+            if (Date.now() > deadline) throw new Error(\`only \${count} of 20 samples arrived\`)
+            await a.put("gc/x", new Uint8Array(1 << 16), { congestionControl: CongestionControl.BLOCK })
+            await new Promise((r) => setTimeout(r, 10))
+        }
         const before = await nativePayloadsAlive(version)
         for (let i = 0; i < 10 && (await nativePayloadsAlive(version)) > 0; i++) { globalThis.gc(); await new Promise((r) => setTimeout(r, 20)) }
         console.log(JSON.stringify({ before, after: await nativePayloadsAlive(version) }))
