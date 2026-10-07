@@ -335,6 +335,8 @@ pub extern "C" fn zd_wake(session_id: u32) {
     }
 }
 
+const DRAIN_BYTE_BUDGET: usize = 1 << 20;
+
 /// Serializes the ready messages for JS: each is a u32 little-endian length then its bytes.
 /// Returns the total length; read it with `zd_take_result`.
 #[no_mangle]
@@ -345,7 +347,8 @@ pub extern "C" fn zd_drain(session_id: u32, max_messages: u32) -> usize {
     let mut out = Vec::new();
     let mut count = 0;
     let mut next = native.held.lock().unwrap().take();
-    while count < max_messages {
+    // a byte budget too: a thousand big inline payloads would make one huge batch for JS to copy
+    while count < max_messages && out.len() < DRAIN_BYTE_BUDGET {
         let Some((message, sequence_id)) = next.take().or_else(|| native.outbox.try_recv().ok()) else {
             break;
         };

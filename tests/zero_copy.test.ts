@@ -42,6 +42,8 @@ Deno.test({ name: "zero-copy: small payloads are copied, big ones are views on n
         const small = await receive(b, "zc/small", () => a.put("zc/small", "hello"))
         assertEquals(small.payload().toString(), "hello")
         assert(!small.payload().isZeroCopy())
+        // its own copy, not a slice of the batch it arrived in (which would keep the whole batch alive)
+        assertEquals(small.payload().toBytes().buffer.byteLength, 5)
 
         const bytes = new Uint8Array(1 << 20).map((_, i) => i % 251)
         const big = await receive(b, "zc/big", () => a.put("zc/big", bytes, BLOCK))
